@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from database import engine, Base 
+from models import NoteModel
 
 app = FastAPI()
+Base.metadata.create_all(bind=engine)
 
 class Note(BaseModel): 
     title: str

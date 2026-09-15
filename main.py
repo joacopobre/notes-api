@@ -1,16 +1,22 @@
 from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel 
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
 from models import NoteModel
+from claude_client import client
+from fastapi.responses import StreamingResponse
+
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
+
 
 class Note(BaseModel): 
     title: str
     content: str
 
+class ChatRequest(BaseModel):
+    message:str
 
 
 @app.get("/notes")
@@ -50,3 +56,17 @@ def delete_note(note_id:int, db : Session = Depends(get_db)):
     db.delete(note)
     db.commit()
     return {"message": "Note deleted", "id": note_id}
+
+
+# anthropic endpoint
+@app.post('/chat')
+def chat(request:ChatRequest):
+    def generate():
+        with client.messages.stream(
+            model='claude-sonnet-5',
+            max_tokens=1024,
+            messages=[{'role':"user", 'content':request.message}]
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+    return StreamingResponse(generate(), media_type='text/plain')

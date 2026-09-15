@@ -5,6 +5,13 @@ load_dotenv()
 
 client = Anthropic()
 
-message = client.messages.create(model='claude-sonnet-5', max_tokens=1024, messages=[{'role': 'user', 'content': 'Hello this is my first python with an LLM integrated, any tips?'}])
+with client.messages.stream(
+    model='claude-sonnet-5', 
+    max_tokens=1024,
+    messages=[{'role': 'user', 'content': 'Hello this is my first python with an LLM integrated, any tips?'}]
+    ) as stream:
+    for text in stream.text_stream:
+        print(text, end='' , flush=True)
 
-print(message.content[0].text)
+
+

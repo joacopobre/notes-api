@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     message:str
 
 
+
 @app.get("/notes")
 def list_notes(db : Session = Depends(get_db)):
     return db.query(NoteModel).all()

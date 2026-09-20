@@ -5,7 +5,8 @@ from database import engine, Base, get_db
 from models import NoteModel, Conversation, Message
 from claude_client import client
 from fastapi.responses import StreamingResponse
-from tool import tools, search_notes
+from tools import tools, search_notes
+from tools import get_embedding
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
@@ -27,7 +28,9 @@ def list_notes(db : Session = Depends(get_db)):
 
 @app.post("/notes")
 def create_note(note : Note, db : Session = Depends(get_db)):
-    new_note = NoteModel(title=note.title, content=note.content)
+    combined_txt = f"{note.title}\n{note.content}"
+    new_embedding = get_embedding(combined_txt)
+    new_note = NoteModel(title=note.title, content=note.content,embedding=new_embedding)
     db.add(new_note)
     db.commit()
     db.refresh(new_note)

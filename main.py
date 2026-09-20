@@ -5,7 +5,7 @@ from database import engine, Base, get_db
 from models import NoteModel, Conversation, Message
 from claude_client import client
 from fastapi.responses import StreamingResponse
-from tools import tools, search_notes
+from tools import get_response_text, semantic_search, tools, search_notes
 from tools import get_embedding
 
 app = FastAPI()
@@ -123,26 +123,37 @@ def chat_with_tools(request: ChatRequest, db: Session = Depends(get_db)):
                 messages= message_for_claude,
                 tools= tools)
     
+    tool_use_blocks =[]
     if response.stop_reason == "tool_use":
         for block in response.content:
             if block.type == 'tool_use':
-                tool_use_block = block
-                break
-        result = search_notes(tool_use_block.input["query"], db)
-        strings = [f"{note.title}:{note.content}" for note in result]
-        string = "\n".join(strings)
+                tool_use_blocks.append(block) 
+
+        tool_result = []
+        for tool in tool_use_blocks:
+            if tool.name == 'search_notes':
+                result = search_notes(tool.input["query"], db)
+                strings = [f"{note.title}:{note.content}" for note in result]
+                string = "\n".join(strings)
+                tool_result.append({"type": "tool_result", "tool_use_id": tool.id, "content": string})
+            elif tool.name == "semantic_search":
+                result = semantic_search(tool.input["query"],db)
+                strings = [f"{note.title}:{note.content}" for note in result]
+                string = "\n".join(strings)
+                tool_result.append({"type": "tool_result", "tool_use_id": tool.id, "content": string})
+
         assistant_msg = {'role': "assistant", "content":response.content}
-        tool_result_msg = {"role": "user", "content": [{"type": "tool_result", "tool_use_id": tool_use_block.id, "content": string}]}
+        tool_result_msg = {"role": "user", "content": tool_result}
         messages_with_result = message_for_claude + [assistant_msg, tool_result_msg]
 
         final_response = client.messages.create(model='claude-sonnet-5', max_tokens=1024, messages=messages_with_result, tools=tools)
 
-        message = Message(role="assistant", content=final_response.content[0].text,conversation_id=conversation_id)
+        message = Message(role="assistant", content=get_response_text(final_response) ,conversation_id=conversation_id)
         db.add(message)
         db.commit()
-        return final_response.content[0].text
+        return get_response_text(final_response)
     else:
-        message = Message(role="assistant", content=response.content[0].text, conversation_id=conversation_id)
+        message = Message(role="assistant", content=get_response_text(response), conversation_id=conversation_id)
         db.add(message)
         db.commit()
-        return response.content[0].text
+        return get_response_text(response)
